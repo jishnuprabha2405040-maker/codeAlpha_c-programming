@@ -1,20 +1,3 @@
-/*
- * matrix_operations.c
- *
- * Implements:
- *  - Matrix Addition
- *  - Matrix Multiplication
- *  - Transpose
- *
- * Uses functions and dynamic 2D arrays (contiguous allocation) for modularity.
- *
- * Compile:
- *   gcc -std=c11 -O2 -o matrix_operations matrix_operations.c
- *
- * Example:
- *   ./matrix_operations
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 
