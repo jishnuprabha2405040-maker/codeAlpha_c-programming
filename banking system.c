@@ -1,164 +1,115 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define DATA_FILE "accounts.dat"
+
+#define MAX 100   // maximum number of accounts
+
 typedef struct {
     int acc_no;
     char name[50];
     double balance;
 } Account;
-void trim_newline(char *s) {
-    size_t len = strlen(s);
-    if (len == 0) return;
-    if (s[len-1] == '\n') s[len-1] = '\0';
-}
-void clear_stdin(void) {
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF) { }
-}
-int next_acc_no() {
-    FILE *fp = fopen(DATA_FILE, "rb");
-    if (!fp) return 1001; // start from 1001
-    Account a;
-    int max = 1000;
-    while (fread(&a, sizeof(Account), 1, fp) == 1) {
-        if (a.acc_no > max) max = a.acc_no;
-    }
-    fclose(fp);
-    return max + 1;
-}
+
+Account accounts[MAX];
+int count = 0;
+int next_acc_no = 1001; // auto-increment starting number
+
 void create_account() {
-    Account a;
-    a.acc_no = next_acc_no();
-    printf("Enter account holder name: ");
-    if (fgets(a.name, sizeof(a.name), stdin) == NULL) return;
-    trim_newline(a.name);
-    if (strlen(a.name) == 0) {
-        printf("Name cannot be empty.\n");
+    if (count >= MAX) {
+        printf("Cannot create more accounts.\n");
         return;
     }
+    Account a;
+    a.acc_no = next_acc_no++;
+    printf("Enter account holder name: ");
+    getchar(); // clear newline
+    fgets(a.name, sizeof(a.name), stdin);
+    a.name[strcspn(a.name, "\n")] = '\0';
 
     printf("Enter initial deposit amount: ");
-    if (scanf("%lf", &a.balance) != 1) { clear_stdin(); printf("Invalid amount.\n"); return; }
-    clear_stdin();
-    if (a.balance < 0.0) {
-        printf("Initial deposit cannot be negative.\n");
-        return;
-    }
+    scanf("%lf", &a.balance);
 
-    FILE *fp = fopen(DATA_FILE, "ab");
-    if (!fp) {
-        perror("Unable to open data file for appending");
-        return;
-    }
-    fwrite(&a, sizeof(Account), 1, fp);
-    fclose(fp);
-
+    accounts[count++] = a;
     printf("Account created successfully!\nAccount Number: %d\nName: %s\nBalance: %.2f\n",
            a.acc_no, a.name, a.balance);
 }
-int find_account(int acc_no, Account *result, long *pos) {
-    FILE *fp = fopen(DATA_FILE, "rb");
-    if (!fp) return 0;
-    Account a;
-    while (1) {
-        long offset = ftell(fp);
-        if (fread(&a, sizeof(Account), 1, fp) != 1) break;
-        if (a.acc_no == acc_no) {
-            if (result) *result = a;
-            if (pos) *pos = offset;
-            fclose(fp);
-            return 1;
-        }
+
+int find_account(int acc_no) {
+    for (int i = 0; i < count; i++) {
+        if (accounts[i].acc_no == acc_no) return i;
     }
-    fclose(fp);
-    return 0;
+    return -1;
 }
-int update_account_at_offset(long offset, const Account *a) {
-    FILE *fp = fopen(DATA_FILE, "rb+");
-    if (!fp) return 0;
-    if (fseek(fp, offset, SEEK_SET) != 0) { fclose(fp); return 0; }
-    if (fwrite(a, sizeof(Account), 1, fp) != 1) { fclose(fp); return 0; }
-    fclose(fp);
-    return 1;
-}
-void transact(int type) {
+
+void deposit() {
     int acc_no;
-    printf("Enter account number: ");
-    if (scanf("%d", &acc_no) != 1) { clear_stdin(); printf("Invalid account number.\n"); return; }
-    clear_stdin();
-
-    Account a;
-    long pos;
-    if (!find_account(acc_no, &a, &pos)) {
-        printf("Account number %d not found.\n", acc_no);
-        return;
-    }
-
     double amt;
-    if (type == 1) printf("Enter deposit amount: ");
-    else printf("Enter withdrawal amount: ");
-    if (scanf("%lf", &amt) != 1) { clear_stdin(); printf("Invalid amount.\n"); return; }
-    clear_stdin();
-
-    if (amt <= 0.0) {
-        printf("Amount must be positive.\n");
+    printf("Enter account number: ");
+    scanf("%d", &acc_no);
+    int idx = find_account(acc_no);
+    if (idx == -1) {
+        printf("Account not found.\n");
         return;
     }
-
-    if (type == 1) {
-        a.balance += amt;
-        if (!update_account_at_offset(pos, &a)) {
-            printf("Failed to update account.\n");
-            return;
-        }
-        printf("Deposit successful. New balance for account %d: %.2f\n", a.acc_no, a.balance);
-    } else {
-        if (amt > a.balance) {
-            printf("Insufficient balance. Current balance: %.2f\n", a.balance);
-            return;
-        }
-        a.balance -= amt;
-        if (!update_account_at_offset(pos, &a)) {
-            printf("Failed to update account.\n");
-            return;
-        }
-        printf("Withdrawal successful. New balance for account %d: %.2f\n", a.acc_no, a.balance);
+    printf("Enter deposit amount: ");
+    scanf("%lf", &amt);
+    if (amt <= 0) {
+        printf("Invalid amount.\n");
+        return;
     }
+    accounts[idx].balance += amt;
+    printf("Deposit successful. New balance: %.2f\n", accounts[idx].balance);
 }
+
+void withdraw() {
+    int acc_no;
+    double amt;
+    printf("Enter account number: ");
+    scanf("%d", &acc_no);
+    int idx = find_account(acc_no);
+    if (idx == -1) {
+        printf("Account not found.\n");
+        return;
+    }
+    printf("Enter withdrawal amount: ");
+    scanf("%lf", &amt);
+    if (amt <= 0 || amt > accounts[idx].balance) {
+        printf("Invalid or insufficient balance.\n");
+        return;
+    }
+    accounts[idx].balance -= amt;
+    printf("Withdrawal successful. New balance: %.2f\n", accounts[idx].balance);
+}
+
 void balance_enquiry() {
     int acc_no;
     printf("Enter account number: ");
-    if (scanf("%d", &acc_no) != 1) { clear_stdin(); printf("Invalid account number.\n"); return; }
-    clear_stdin();
-
-    Account a;
-    if (find_account(acc_no, &a, NULL)) {
-        printf("Account Number: %d\nName: %s\nBalance: %.2f\n", a.acc_no, a.name, a.balance);
-    } else {
-        printf("Account number %d not found.\n", acc_no);
-    }
-}
-void display_all() {
-    FILE *fp = fopen(DATA_FILE, "rb");
-    if (!fp) {
-        printf("No accounts found.\n");
+    scanf("%d", &acc_no);
+    int idx = find_account(acc_no);
+    if (idx == -1) {
+        printf("Account not found.\n");
         return;
     }
-    Account a;
-    int count = 0;
-    printf("--------------------------------------------------\n");
-    printf("| %-8s | %-25s | %-10s |\n", "Acc No", "Name", "Balance");
-    printf("--------------------------------------------------\n");
-    while (fread(&a, sizeof(Account), 1, fp) == 1) {
-        printf("| %-8d | %-25s | %-10.2f |\n", a.acc_no, a.name, a.balance);
-        count++;
+    printf("Account Number: %d\nName: %s\nBalance: %.2f\n",
+           accounts[idx].acc_no, accounts[idx].name, accounts[idx].balance);
+}
+
+void display_all() {
+    if (count == 0) {
+        printf("No accounts to display.\n");
+        return;
     }
     printf("--------------------------------------------------\n");
-    if (count == 0) printf("No accounts to display.\n");
-    fclose(fp);
+    printf("| %-8s | %-20s | %-10s |\n", "Acc No", "Name", "Balance");
+    printf("--------------------------------------------------\n");
+    for (int i = 0; i < count; i++) {
+        printf("| %-8d | %-20s | %-10.2f |\n",
+               accounts[i].acc_no, accounts[i].name, accounts[i].balance);
+    }
+    printf("--------------------------------------------------\n");
 }
-void menu() {
+
+int main() {
     int choice;
     while (1) {
         printf("\n=== Bank Account Management System ===\n");
@@ -169,23 +120,17 @@ void menu() {
         printf("5. Display All Accounts\n");
         printf("6. Exit\n");
         printf("Choose an option: ");
-        if (scanf("%d", &choice) != 1) { clear_stdin(); printf("Invalid input.\n"); continue; }
-        clear_stdin();
+        scanf("%d", &choice);
 
         switch (choice) {
             case 1: create_account(); break;
-            case 2: transact(1); break;
-            case 3: transact(2); break;
+            case 2: deposit(); break;
+            case 3: withdraw(); break;
             case 4: balance_enquiry(); break;
             case 5: display_all(); break;
-            case 6: printf("Exiting. Goodbye!\n"); return;
-            default: printf("Invalid choice. Please select 1-6.\n");
+            case 6: printf("Exiting...\n"); exit(0);
+            default: printf("Invalid choice.\n");
         }
     }
-}
-
-int main(void) {
-    printf("Bank Account Management System (file: %s)\n", DATA_FILE);
-    menu();
     return 0;
 }
